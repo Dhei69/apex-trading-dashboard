@@ -1,0 +1,460 @@
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Trash2, Settings, TrendingUp, Plus, RotateCcw, Save } from 'lucide-react';
+
+const ApexTradingDashboard = () => {
+  const [accountSize, setAccountSize] = useState('50000');
+  const [profitTarget, setProfitTarget] = useState(8);
+  const [maxDrawdown, setMaxDrawdown] = useState(5);
+  const [trades, setTrades] = useState([]);
+  const [newTrade, setNewTrade] = useState({
+    date: new Date().toISOString().split('T')[0],
+    result: '',
+    notes: ''
+  });
+
+  // Configurações das contas
+  const accountSizes = {
+    '25000': { value: 25000, label: '$25,000' },
+    '50000': { value: 50000, label: '$50,000' },
+    '100000': { value: 100000, label: '$100,000' },
+    '150000': { value: 150000, label: '$150,000' },
+    '200000': { value: 200000, label: '$200,000' }
+  };
+
+  const initialBalance = accountSizes[accountSize].value;
+  const targetProfit = (initialBalance * profitTarget) / 100;
+  const maxDrawdownAmount = (initialBalance * maxDrawdown) / 100;
+
+  // Cálculos principais
+  const totalProfit = trades.reduce((sum, trade) => sum + parseFloat(trade.result || 0), 0);
+  const currentBalance = initialBalance + totalProfit;
+  const currentDrawdown = Math.max(0, initialBalance - currentBalance);
+  const currentDrawdownPercent = (currentDrawdown / initialBalance) * 100;
+  const progressPercent = totalProfit > 0 ? Math.min((totalProfit / targetProfit) * 100, 100) : 0;
+
+  // Status da conta
+  const getAccountStatus = () => {
+    const profitAchieved = totalProfit >= targetProfit;
+    const drawdownExceeded = currentDrawdownPercent > maxDrawdown;
+    
+    if (drawdownExceeded) {
+      return 'Reprovado';
+    } else if (profitAchieved) {
+      return 'Apto para Saque';
+    } else {
+      return 'Em Andamento';
+    }
+  };
+
+  // Adicionar trade
+  const addTrade = () => {
+    if (!newTrade.result) return;
+    
+    const trade = {
+      id: Date.now(),
+      date: newTrade.date,
+      result: parseFloat(newTrade.result),
+      notes: newTrade.notes,
+      balanceAfter: currentBalance + parseFloat(newTrade.result)
+    };
+    
+    setTrades([...trades, trade]);
+    setNewTrade({ date: new Date().toISOString().split('T')[0], result: '', notes: '' });
+  };
+
+  // Remover trade
+  const removeTrade = (id) => {
+    setTrades(trades.filter(trade => trade.id !== id));
+  };
+
+  // Limpar histórico
+  const clearHistory = () => {
+    setTrades([]);
+  };
+
+  // Salvar configurações
+  const saveAll = () => {
+    const configData = {
+      accountSize,
+      profitTarget,
+      maxDrawdown,
+      trades,
+      timestamp: new Date().toISOString()
+    };
+    console.log('Configurações salvas:', configData);
+    alert('Configurações salvas com sucesso!');
+  };
+
+  // Dados para gráficos
+  const tradeResultsData = trades.map((trade, index) => ({
+    trade: index + 1,
+    result: trade.result,
+    cumulative: trades.slice(0, index + 1).reduce((sum, t) => sum + t.result, 0),
+    date: trade.date,
+    balance: initialBalance + trades.slice(0, index + 1).reduce((sum, t) => sum + t.result, 0)
+  }));
+
+  const balanceData = [
+    { trade: 0, balance: initialBalance, date: 'Inicial' },
+    ...tradeResultsData.map((item, index) => ({
+      trade: index + 1,
+      balance: item.balance,
+      date: item.date
+    }))
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Configuração da Conta */}
+        <div className="bg-gradient-to-r from-pink-400 to-red-400 rounded-2xl p-6 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Settings className="w-6 h-6 text-white" />
+              <h2 className="text-xl font-bold text-white">Configuração da Conta</h2>
+              <span className="text-sm text-white/80">Saldo Inicial</span>
+            </div>
+            <button
+              onClick={saveAll}
+              className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-xl hover:bg-white/30 transition-all font-semibold flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              SALVAR
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-white/90 mb-2">
+                Tamanho da Conta (USD)
+              </label>
+              <select
+                value={accountSize}
+                onChange={(e) => setAccountSize(e.target.value)}
+                className="w-full p-3 rounded-xl bg-white/20 backdrop-blur-sm text-white font-semibold border-0 focus:bg-white/30 transition-all"
+              >
+                {Object.entries(accountSizes).map(([key, account]) => (
+                  <option key={key} value={key} className="text-gray-800 font-semibold">{account.label}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-white/90 mb-2">
+                Saldo Inicial
+              </label>
+              <input
+                type="text"
+                value={initialBalance.toLocaleString()}
+                disabled
+                className="w-full p-3 rounded-xl bg-white/30 backdrop-blur-sm text-white font-bold border-0"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-white/90 mb-2">
+                Meta de Profit Target (%)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={profitTarget}
+                onChange={(e) => setProfitTarget(parseFloat(e.target.value) || 0)}
+                className="w-full p-3 rounded-xl bg-white/20 backdrop-blur-sm text-white font-semibold border-0 focus:bg-white/30 transition-all"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-white/90 mb-2">
+                Max Drawdown (%)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={maxDrawdown}
+                onChange={(e) => setMaxDrawdown(parseFloat(e.target.value) || 0)}
+                className="w-full p-3 rounded-xl bg-white/20 backdrop-blur-sm text-white font-semibold border-0 focus:bg-white/30 transition-all"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Cards de Status */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-4 text-white shadow-lg">
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-1">SALDO ATUAL</h3>
+            <p className="text-2xl font-bold">${currentBalance.toLocaleString()}</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-emerald-400 to-green-500 rounded-2xl p-4 text-white shadow-lg">
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-1">LUCRO TOTAL</h3>
+            <p className={`text-2xl font-bold ${totalProfit >= 0 ? '' : 'text-red-200'}`}>
+              ${totalProfit.toLocaleString()}
+            </p>
+          </div>
+
+          <div className="bg-gradient-to-br from-cyan-400 to-blue-400 rounded-2xl p-4 text-white shadow-lg">
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-1">DRAWDOWN ATUAL</h3>
+            <p className="text-2xl font-bold">{currentDrawdownPercent.toFixed(1)}%</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-orange-400 to-pink-400 rounded-2xl p-4 text-white shadow-lg">
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-1">DRAWDOWN MÁXIMO</h3>
+            <p className="text-2xl font-bold">${maxDrawdownAmount.toLocaleString()}</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-cyan-400 to-cyan-500 rounded-2xl p-4 text-white shadow-lg">
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-1">META PROFIT</h3>
+            <p className="text-2xl font-bold">${targetProfit.toLocaleString()}</p>
+          </div>
+
+          <div className={`${getAccountStatus() === 'Apto para Saque' ? 'bg-gradient-to-br from-green-500 to-emerald-600' : getAccountStatus() === 'Reprovado' ? 'bg-gradient-to-br from-red-500 to-red-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600'} rounded-2xl p-4 text-white shadow-lg`}>
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-1">STATUS DA CONTA</h3>
+            <p className="text-lg font-bold">{getAccountStatus()}</p>
+          </div>
+        </div>
+
+        {/* Progresso para Meta */}
+        <div className="bg-white rounded-2xl p-6 shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-6 h-6 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-800">Progresso para Meta</h3>
+          </div>
+          <div className="relative">
+            <div className="w-full bg-gray-200 rounded-full h-4">
+              <div 
+                className="bg-gradient-to-r from-purple-500 to-pink-500 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                style={{ width: `${Math.min(progressPercent, 100)}%` }}
+              >
+                {progressPercent > 10 && (
+                  <span className="text-xs font-bold text-white">{progressPercent.toFixed(0)}%</span>
+                )}
+              </div>
+            </div>
+            <p className="text-sm font-semibold text-gray-600 mt-2">{progressPercent.toFixed(1)}% da meta atingida</p>
+          </div>
+        </div>
+
+        {/* Registrar Trade */}
+        <div className="bg-white rounded-2xl p-6 shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-6 h-6 bg-gradient-to-br from-orange-400 to-red-400 rounded-lg flex items-center justify-center">
+              <Plus className="w-4 h-4 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-800">Registrar Trade</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Data</label>
+              <input
+                type="date"
+                value={newTrade.date}
+                onChange={(e) => setNewTrade({...newTrade, date: e.target.value})}
+                className="w-full p-3 rounded-xl border-2 border-gray-200 font-semibold focus:border-blue-400 focus:outline-none transition-all"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Resultado (USD)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={newTrade.result}
+                onChange={(e) => setNewTrade({...newTrade, result: e.target.value})}
+                className="w-full p-3 rounded-xl border-2 border-gray-200 font-semibold focus:border-blue-400 focus:outline-none transition-all"
+                placeholder="Ex: 250.50 ou -125.25"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Observações</label>
+              <input
+                type="text"
+                value={newTrade.notes}
+                onChange={(e) => setNewTrade({...newTrade, notes: e.target.value})}
+                className="w-full p-3 rounded-xl border-2 border-gray-200 font-semibold focus:border-blue-400 focus:outline-none transition-all"
+                placeholder="Opcional"
+              />
+            </div>
+            
+            <button
+              onClick={addTrade}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all font-bold shadow-lg"
+            >
+              ADICIONAR TRADE
+            </button>
+            
+            <button
+              onClick={clearHistory}
+              className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-3 rounded-xl hover:from-orange-600 hover:to-red-600 transition-all font-bold shadow-lg"
+            >
+              LIMPAR HISTÓRICO
+            </button>
+          </div>
+        </div>
+
+        {/* Gráfico Interativo dos Trades */}
+        {trades.length > 0 && (
+          <div className="bg-white rounded-2xl p-6 shadow-lg">
+            <h3 className="text-lg font-bold text-gray-800 mb-6">📈 Evolução dos Trades</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Gráfico de Resultados */}
+              <div>
+                <h4 className="text-md font-bold text-gray-600 mb-4">Resultado por Trade</h4>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={tradeResultsData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="trade" 
+                      stroke="#6b7280"
+                      tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 'bold' }}
+                    />
+                    <YAxis 
+                      stroke="#6b7280"
+                      tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 'bold' }}
+                    />
+                    <Tooltip 
+                      formatter={(value) => [`$${value}`, 'Resultado']}
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '2px solid #e5e7eb', 
+                        borderRadius: '12px',
+                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        fontWeight: 'bold'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="result" 
+                      stroke="#8b5cf6" 
+                      strokeWidth={3}
+                      dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 6 }}
+                      activeDot={{ r: 8, fill: '#a855f7', strokeWidth: 2 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Gráfico de Evolução do Saldo */}
+              <div>
+                <h4 className="text-md font-bold text-gray-600 mb-4">Evolução do Saldo</h4>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={balanceData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="trade" 
+                      stroke="#6b7280"
+                      tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 'bold' }}
+                    />
+                    <YAxis 
+                      stroke="#6b7280"
+                      tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 'bold' }}
+                    />
+                    <Tooltip 
+                      formatter={(value) => [`$${value}`, 'Saldo']}
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '2px solid #e5e7eb', 
+                        borderRadius: '12px',
+                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        fontWeight: 'bold'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="balance" 
+                      stroke="#10b981" 
+                      strokeWidth={3}
+                      dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
+                      activeDot={{ r: 8, fill: '#059669', strokeWidth: 2 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Histórico de Trades */}
+        {trades.length > 0 && (
+          <div className="bg-white rounded-2xl p-6 shadow-lg">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                <span className="text-white text-xs font-bold">📊</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-800">Histórico de Trades</h3>
+            </div>
+            
+            {/* Header da tabela */}
+            <div className="grid grid-cols-6 gap-4 p-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold text-sm uppercase tracking-wide rounded-t-xl">
+              <div>DATA</div>
+              <div>RESULTADO</div>
+              <div>SALDO</div>
+              <div>DRAWDOWN</div>
+              <div>OBSERVAÇÕES</div>
+              <div>AÇÕES</div>
+            </div>
+            
+            {/* Linhas da tabela */}
+            <div className="max-h-80 overflow-y-auto">
+              {trades.map((trade, index) => {
+                const balanceAfter = trades.slice(0, index + 1).reduce((sum, t) => sum + t.result, initialBalance);
+                const drawdown = Math.max(0, (initialBalance - balanceAfter) / initialBalance * 100);
+                const percentOfTotal = totalProfit > 0 && trade.result > 0 ? (trade.result / totalProfit * 100).toFixed(1) : 0;
+                
+                return (
+                  <div key={trade.id} className={`grid grid-cols-6 gap-4 p-4 border-b border-gray-200 hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
+                    <div className="font-semibold text-gray-700">
+                      {new Date(trade.date).toLocaleDateString('pt-BR')}
+                    </div>
+                    <div className={`font-bold ${trade.result >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ${trade.result.toFixed(2)}
+                      {trade.result > 0 && totalProfit > 0 && (
+                        <div className="text-xs text-purple-600 mt-1">
+                          {percentOfTotal}% do total
+                        </div>
+                      )}
+                    </div>
+                    <div className="font-semibold text-gray-700">
+                      ${balanceAfter.toLocaleString()}
+                    </div>
+                    <div className={`font-semibold ${drawdown > maxDrawdown ? 'text-red-600' : 'text-orange-600'}`}>
+                      {drawdown.toFixed(1)}%
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {trade.notes || '-'}
+                    </div>
+                    <div>
+                      <button
+                        onClick={() => removeTrade(trade.id)}
+                        className="bg-red-100 text-red-600 p-2 rounded-lg hover:bg-red-200 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {trades.length === 0 && (
+          <div className="bg-white rounded-2xl p-12 text-center shadow-lg">
+            <div className="text-6xl mb-4">📈</div>
+            <h3 className="text-2xl font-bold text-gray-600 mb-2">Nenhum trade registrado</h3>
+            <p className="text-gray-500">Adicione seu primeiro trade para começar a acompanhar seu progresso na Apex Trading Fund</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ApexTradingDashboard;
